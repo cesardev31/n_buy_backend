@@ -12,12 +12,12 @@ from drf_yasg import openapi
     method='post',
     request_body=openapi.Schema(
         type=openapi.TYPE_OBJECT,
-        required=['username', 'email', 'password'],
+        required=['name', 'email', 'password', 'confirmPassword'],
         properties={
-            'username': openapi.Schema(type=openapi.TYPE_STRING, description='Nombre de usuario'),
+            'name': openapi.Schema(type=openapi.TYPE_STRING, description='Nombre del usuario'),
             'email': openapi.Schema(type=openapi.TYPE_STRING, format='email', description='Correo electrónico'),
             'password': openapi.Schema(type=openapi.TYPE_STRING, format='password', description='Contraseña'),
-            'is_admin': openapi.Schema(type=openapi.TYPE_BOOLEAN, description='¿Es administrador?', default=False),
+            'confirmPassword': openapi.Schema(type=openapi.TYPE_STRING, format='password', description='Confirmar contraseña'),
         }
     ),
     responses={
@@ -27,9 +27,8 @@ from drf_yasg import openapi
                 type=openapi.TYPE_OBJECT,
                 properties={
                     'user_id': openapi.Schema(type=openapi.TYPE_INTEGER),
-                    'username': openapi.Schema(type=openapi.TYPE_STRING),
+                    'name': openapi.Schema(type=openapi.TYPE_STRING),
                     'email': openapi.Schema(type=openapi.TYPE_STRING),
-                    'is_admin': openapi.Schema(type=openapi.TYPE_BOOLEAN),
                     'tokens': openapi.Schema(
                         type=openapi.TYPE_OBJECT,
                         properties={
@@ -48,20 +47,21 @@ from drf_yasg import openapi
 @permission_classes([AllowAny])
 def register_user(request):
     try:
-        username = request.data.get('username')
+        name = request.data.get('name')
         password = request.data.get('password')
+        confirm_password = request.data.get('confirmPassword')
         email = request.data.get('email')
-        is_admin = request.data.get('is_admin', False)  # Por defecto es False
 
-        if not username or not password or not email:
+        # Validaciones
+        if not name or not password or not email or not confirm_password:
             return Response(
-                {'error': 'Por favor proporcione username, password y email'}, 
+                {'error': 'Todos los campos son obligatorios'}, 
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        if User.objects.filter(username=username).exists():
+        if password != confirm_password:
             return Response(
-                {'error': 'El username ya existe'}, 
+                {'error': 'Las contraseñas no coinciden'}, 
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -72,19 +72,17 @@ def register_user(request):
             )
 
         user = User.objects.create_user(
-            username=username,
+            name=name,
             email=email,
-            password=password,
-            is_admin=is_admin
+            password=password
         )
 
         refresh = RefreshToken.for_user(user)
 
         return Response({
             'user_id': user.id,
-            'username': user.username,
+            'name': user.name,
             'email': user.email,
-            'is_admin': user.is_admin,
             'tokens': {
                 'refresh': str(refresh),
                 'access': str(refresh.access_token),
