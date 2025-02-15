@@ -24,9 +24,9 @@ from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib.auth import views as auth_views
 
-# Determinar el esquema basado en DEBUG
-scheme = 'http' if settings.DEBUG else 'https'
+# Determinar el host basado en DEBUG
 host = 'localhost:8000' if settings.DEBUG else 'n-buy-backend.onrender.com'
+protocol = 'http' if settings.DEBUG else 'https'
 
 schema_view = get_schema_view(
     openapi.Info(
@@ -39,8 +39,7 @@ schema_view = get_schema_view(
     ),
     public=True,
     permission_classes=(permissions.AllowAny,),
-    url=f"{scheme}://{host}",
-    schemes=[scheme],
+    url=f"{protocol}://{host}",
 )
 
 urlpatterns = [
