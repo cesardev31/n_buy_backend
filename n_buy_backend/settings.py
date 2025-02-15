@@ -13,6 +13,10 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 from pathlib import Path
 import os
 from datetime import timedelta
+from dotenv import load_dotenv
+
+# Cargar variables de entorno desde .env
+load_dotenv()
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -27,7 +31,11 @@ SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-j#556j58plrj2$g%=_1j2
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get('DEBUG', 'True') == 'True'
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = [
+    'localhost',
+    '127.0.0.1',
+    'dpg-cuob142j1k6c7396pia0-a.oregon-postgres.render.com'
+]
 
 
 # Application definition
@@ -41,6 +49,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'rest_framework',
     'rest_framework_simplejwt',
+    'drf_yasg',
     'users',
     'products',
 ]
@@ -82,10 +91,10 @@ WSGI_APPLICATION = 'n_buy_backend.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.environ.get('DB_NAME', 'n_buy_db'),
-        'USER': os.environ.get('DB_USER', 'postgres'),
-        'PASSWORD': os.environ.get('DB_PASSWORD', 'postgres'),
-        'HOST': os.environ.get('DB_HOST', 'localhost'),
+        'NAME': os.environ.get('DB_NAME', 'n_buy_backend_db'),
+        'USER': os.environ.get('DB_USER', 'n_buy_backend_db_user'),
+        'PASSWORD': os.environ.get('DB_PASSWORD', 'Dfs7iYwbsCGwVO6VjRICx9yTjjD5uqgW'),
+        'HOST': os.environ.get('DB_HOST', 'dpg-cuob142j1k6c7396pia0-a.oregon-postgres.render.com'),
         'PORT': os.environ.get('DB_PORT', '5432'),
     }
 }
@@ -148,3 +157,6 @@ SIMPLE_JWT = {
     'BLACKLIST_AFTER_ROTATION': True,
     'SIGNING_KEY': os.environ.get('JWT_SECRET_KEY', SECRET_KEY),
 }
+
+# Agregar esta línea después de DEFAULT_AUTO_FIELD
+AUTH_USER_MODEL = 'users.User'

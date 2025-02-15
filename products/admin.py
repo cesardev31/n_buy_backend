@@ -1,11 +1,11 @@
 from django.contrib import admin
-from .models import Producto, Inventory, Rating
+from .models import Product, Inventory, Rating
 
-@admin.register(Producto)
-class ProductoAdmin(admin.ModelAdmin):
-    list_display = ('name', 'brand', 'price', 'category')
-    search_fields = ('name', 'brand')
-    list_filter = ('category',)
+@admin.register(Product)
+class ProductAdmin(admin.ModelAdmin):
+    list_display = ('name', 'brand', 'price', 'category', 'created_at')
+    search_fields = ('name', 'brand', 'category')
+    list_filter = ('category', 'brand')
 
 @admin.register(Inventory)
 class InventoryAdmin(admin.ModelAdmin):
@@ -16,3 +16,4 @@ class InventoryAdmin(admin.ModelAdmin):
 class RatingAdmin(admin.ModelAdmin):
     list_display = ('user', 'product', 'rating', 'created_at')
     search_fields = ('user__username', 'product__name')
+    list_filter = ('rating',)
