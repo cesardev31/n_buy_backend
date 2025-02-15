@@ -9,6 +9,12 @@ psycopg2-binary>=2.9.5
 
 # Servidor y archivos estáticos
 whitenoise>=6.9.0
+daphne>=4.0.0
+
+# WebSocket y Channels
+channels>=4.0.0
+channels-redis>=4.1.0
+redis>=5.0.1
 
 # REST Framework y JWT
 djangorestframework>=3.14.0
