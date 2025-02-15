@@ -148,32 +148,54 @@ def login_user(request):
         # Buscar el usuario por email
         try:
             user = User.objects.get(email=email)
+            
+            # Intentar autenticar usando authenticate primero
+            auth_user = authenticate(request, email=email, password=password)
+            
+            if auth_user is not None:
+                # La autenticación fue exitosa
+                refresh = RefreshToken.for_user(auth_user)
+                return Response({
+                    'user_id': auth_user.id,
+                    'email': auth_user.email,
+                    'username': auth_user.username,
+                    'is_admin': auth_user.is_admin,
+                    'tokens': {
+                        'refresh': str(refresh),
+                        'access': str(refresh.access_token),
+                    }
+                })
+            
+            # Si authenticate falló, intentar verificar la contraseña directamente
+            if user.check_password(password):
+                refresh = RefreshToken.for_user(user)
+                return Response({
+                    'user_id': user.id,
+                    'email': user.email,
+                    'username': user.username,
+                    'is_admin': user.is_admin,
+                    'tokens': {
+                        'refresh': str(refresh),
+                        'access': str(refresh.access_token),
+                    }
+                })
+            else:
+                return Response(
+                    {
+                        'error': 'Contraseña incorrecta',
+                        'debug': {
+                            'email_exists': True,
+                            'password_check_failed': True
+                        }
+                    }, 
+                    status=status.HTTP_401_UNAUTHORIZED
+                )
+                
         except User.DoesNotExist:
             return Response(
                 {'error': 'No existe usuario con este email'}, 
                 status=status.HTTP_404_NOT_FOUND
             )
-
-        # Autenticar usuario
-        user = authenticate(username=user.username, password=password)
-        if user is None:
-            return Response(
-                {'error': 'Credenciales inválidas'}, 
-                status=status.HTTP_401_UNAUTHORIZED
-            )
-
-        # Generar tokens
-        refresh = RefreshToken.for_user(user)
-
-        return Response({
-            'user_id': user.id,
-            'email': user.email,
-            'username': user.username,
-            'tokens': {
-                'refresh': str(refresh),
-                'access': str(refresh.access_token),
-            }
-        })
 
     except Exception as e:
         return Response(
