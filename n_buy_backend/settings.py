@@ -29,7 +29,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-j#556j58plrj2$g%=_1j2(kx6pd2pwapv!fg=78m_@rln6f7le')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.environ.get('DEBUG', 'True') == 'True'
+DEBUG = True  # Temporalmente lo dejamos en True para desarrollo
 
 ALLOWED_HOSTS = ['*']
 
@@ -186,7 +186,9 @@ CORS_ALLOWED_ORIGINS = [
 # Configuración de seguridad
 CSRF_TRUSTED_ORIGINS = ['https://*.render.com', 'http://*', 'https://*']
 
+# Configuración de Swagger
 SWAGGER_SETTINGS = {
+    'USE_SESSION_AUTH': False,
     'SECURITY_DEFINITIONS': {
         'Bearer': {
             'type': 'apiKey',
@@ -194,6 +196,4 @@ SWAGGER_SETTINGS = {
             'in': 'header'
         }
     },
-    'USE_SESSION_AUTH': False,
-    'JSON_EDITOR': True,
 }
