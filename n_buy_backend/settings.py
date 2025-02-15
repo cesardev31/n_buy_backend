@@ -15,9 +15,10 @@ import os
 from datetime import timedelta
 from dotenv import load_dotenv
 
-# Cargar variables de entorno desde .env
+# Cargar variables de entorno desde .env si existe
 env_path = Path(__file__).resolve().parent.parent / '.env'
-load_dotenv(env_path)
+if env_path.exists():
+    load_dotenv(env_path)
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -30,12 +31,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-j#556j58plrj2$g%=_1j2(kx6pd2pwapv!fg=78m_@rln6f7le')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True  # Temporalmente lo dejamos en True para desarrollo
+DEBUG = os.environ.get('DEBUG', 'False').lower() == 'true'
 
-ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '*').split(',')
 
 # Google API Key
-GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
+GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY', 'dummy_key_for_build')
 if not GOOGLE_API_KEY:
     raise Exception("GOOGLE_API_KEY no está configurada en el archivo .env")
 
@@ -72,8 +73,7 @@ MIDDLEWARE = [
 ]
 
 # Solo agregar whitenoise en producción
-if not DEBUG:
-    MIDDLEWARE.insert(1, 'whitenoise.middleware.WhiteNoiseMiddleware')
+MIDDLEWARE.insert(1, 'whitenoise.middleware.WhiteNoiseMiddleware')
 
 ROOT_URLCONF = 'n_buy_backend.urls'
 
@@ -156,18 +156,16 @@ USE_TZ = True
 
 
 # Static files (CSS, JavaScript, Images)
-# https://docs.djangoproject.com/en/5.1/howto/static-files/
-
-# Configuración de archivos estáticos
 STATIC_URL = '/static/'
-STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
-STATICFILES_DIRS = [
-    os.path.join(BASE_DIR, 'static'),
-]
+STATIC_ROOT = os.environ.get('STATIC_ROOT', os.path.join(BASE_DIR, 'static'))
+STATICFILES_DIRS = []
 
-# Solo usar whitenoise en producción
-if not DEBUG:
-    STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+# Media files
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.environ.get('MEDIA_ROOT', os.path.join(BASE_DIR, 'media'))
+
+# Whitenoise configuration
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 # Swagger settings
 SWAGGER_SETTINGS = {

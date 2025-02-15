@@ -5,6 +5,7 @@ FROM python:3.11-slim
 ENV PYTHONDONTWRITEBYTECODE 1
 ENV PYTHONUNBUFFERED 1
 ENV DJANGO_SETTINGS_MODULE=n_buy_backend.settings
+ENV GOOGLE_API_KEY="dummy_key_for_build"
 
 # Establecer el directorio de trabajo
 WORKDIR /app
@@ -21,21 +22,19 @@ RUN apt-get update \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Crear directorios necesarios
+RUN mkdir -p /app/static /app/media
+
 # Copiar el proyecto
 COPY . .
 
-# Crear directorio para archivos estáticos
-RUN mkdir -p /app/static /app/media
+# Configurar whitenoise para archivos estáticos
+ENV DJANGO_SETTINGS_MODULE=n_buy_backend.settings
+ENV STATIC_ROOT=/app/static
+ENV MEDIA_ROOT=/app/media
 
-# Colectar archivos estáticos
-RUN python manage.py collectstatic --noinput
-
-# Exponer puertos
+# Exponer puerto
 EXPOSE 8000
 
-# Script de inicio
-COPY docker-entrypoint.sh /usr/local/bin/
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh
-
-# Comando por defecto
-ENTRYPOINT ["docker-entrypoint.sh"]
+# Comando para iniciar
+CMD daphne -b 0.0.0.0 -p $PORT daphne_server:application
