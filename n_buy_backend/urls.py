@@ -24,6 +24,10 @@ from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib.auth import views as auth_views
 
+# Determinar el esquema basado en DEBUG
+scheme = 'http' if settings.DEBUG else 'https'
+host = 'localhost:8000' if settings.DEBUG else 'n-buy-backend.onrender.com'
+
 schema_view = get_schema_view(
     openapi.Info(
         title="N-Buy API",
@@ -35,6 +39,8 @@ schema_view = get_schema_view(
     ),
     public=True,
     permission_classes=(permissions.AllowAny,),
+    url=f"{scheme}://{host}",
+    schemes=[scheme],
 )
 
 urlpatterns = [
@@ -56,6 +62,11 @@ urlpatterns = [
     path('swagger/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
     path('redoc/', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc'),
     
-    # Redirigir la raíz a la página de prueba del chat
-    path('', lambda request: redirect('chat:chat_test'), name='home'),
-] + static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
+    # Redirigir la raíz a Swagger
+    path('', lambda request: redirect('schema-swagger-ui'), name='root'),
+]
+
+# Servir archivos estáticos y media en desarrollo
+if settings.DEBUG:
+    urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

@@ -177,12 +177,16 @@ SWAGGER_SETTINGS = {
         }
     },
     'USE_SESSION_AUTH': False,
-    'JSON_EDITOR': True,
-    'SUPPORTED_SUBMIT_METHODS': ['get', 'post', 'put', 'delete', 'patch'],
-    'PERSIST_AUTH': True,
-    'REFETCH_SCHEMA_WITH_AUTH': True,
-    'FETCH_SCHEMA_WITH_AUTH': True,
+    'SECURITY_REQUIREMENTS': [{'Bearer': []}],
+    'SCHEMES': ['https'] if not DEBUG else ['http', 'https'],
+    'DEFAULT_PROTOCOL': 'https' if not DEBUG else 'http'
 }
+
+# Configuración para forzar HTTPS
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+SECURE_SSL_REDIRECT = not DEBUG
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
