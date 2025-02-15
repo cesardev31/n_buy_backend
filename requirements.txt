@@ -1,28 +1,32 @@
-# Django y dependencias básicas
-Django==4.1.4
-asgiref==3.5.2
-sqlparse==0.4.3
-tzdata==2022.7
+# Django y dependencias principales
+Django>=4.2.0
+asgiref>=3.6.0
+sqlparse>=0.4.3
+tzdata>=2022.7
 
 # Base de datos
-psycopg2-binary==2.9.5
+psycopg2-binary>=2.9.5
 
-# Servir archivos estáticos
-whitenoise==6.2.0
+# Servidor y archivos estáticos
+whitenoise>=6.2.0
 
-# Django REST Framework y dependencias
-djangorestframework==3.14.0
-djangorestframework-simplejwt==5.3.1
-PyJWT==2.8.0
+# REST Framework y JWT
+djangorestframework>=3.14.0
+djangorestframework-simplejwt>=5.3.1
+PyJWT>=2.8.0
 
 # Documentación API
-drf-yasg==1.21.7
-packaging==23.2
-inflection==0.5.1
-uritemplate==4.1.1
+drf-yasg>=1.21.7
+packaging>=23.2
+inflection>=0.5.1
+uritemplate>=4.1.1
 
 # Variables de entorno
-python-dotenv==1.0.0
+python-dotenv>=1.0.0
 
 # CORS
-django-cors-headers==4.3.1
+django-cors-headers>=4.3.1
+
+# Dependencias adicionales
+pytz
+pyyaml>=5.1
