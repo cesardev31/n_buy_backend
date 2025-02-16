@@ -191,7 +191,7 @@
             updateConnectionStatus('connecting', 'Conectando...');
 
             chatSocket = new WebSocket(
-                'ws://' + window.location.host + '/ws/chat/'
+                'ws://' + 'localhost:8000' + '/ws/chat/'
             );
 
             chatSocket.onopen = function(e) {
@@ -231,12 +231,11 @@
         function sendMessage() {
             const message = messageInput.value.trim();
             if (message && chatSocket && chatSocket.readyState === WebSocket.OPEN) {
-                // Mostrar el mensaje del usuario inmediatamente
-                addMessage(message, false);
-                
                 // Enviar el mensaje al servidor
                 chatSocket.send(JSON.stringify({
-                    'message': message
+                    'message': message,
+                    "is_admin": true,
+                    'name': 'cesar'
                 }));
                 
                 messageInput.value = '';
@@ -265,4 +264,4 @@
         };
     </script>
 </body>
-</html> 
+</html>

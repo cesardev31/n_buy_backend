@@ -63,23 +63,133 @@ def create_product(request):
     except Exception as e:
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
+@swagger_auto_schema(
+    method='get',
+    manual_parameters=[
+        openapi.Parameter(
+            'page',
+            openapi.IN_QUERY,
+            description='Número de página (default: 1)',
+            type=openapi.TYPE_INTEGER,
+            required=False
+        ),
+        openapi.Parameter(
+            'limit',
+            openapi.IN_QUERY,
+            description='Número de items por página (default: 10)',
+            type=openapi.TYPE_INTEGER,
+            required=False
+        ),
+    ],
+    responses={
+        200: openapi.Response(
+            description="Lista de productos paginada",
+            schema=openapi.Schema(
+                type=openapi.TYPE_OBJECT,
+                properties={
+                    'data': openapi.Schema(
+                        type=openapi.TYPE_ARRAY,
+                        items=openapi.Schema(
+                            type=openapi.TYPE_OBJECT,
+                            properties={
+                                'id': openapi.Schema(type=openapi.TYPE_INTEGER),
+                                'name': openapi.Schema(type=openapi.TYPE_STRING),
+                                'brand': openapi.Schema(type=openapi.TYPE_STRING),
+                                'description': openapi.Schema(type=openapi.TYPE_STRING),
+                                'base_price': openapi.Schema(type=openapi.TYPE_STRING),
+                                'current_price': openapi.Schema(type=openapi.TYPE_STRING),
+                                'discount_percentage': openapi.Schema(type=openapi.TYPE_STRING),
+                                'category': openapi.Schema(type=openapi.TYPE_STRING),
+                                'image_url': openapi.Schema(type=openapi.TYPE_STRING),
+                            }
+                        )
+                    ),
+                    'pagination': openapi.Schema(
+                        type=openapi.TYPE_OBJECT,
+                        properties={
+                            'currentPage': openapi.Schema(type=openapi.TYPE_INTEGER),
+                            'totalPages': openapi.Schema(type=openapi.TYPE_INTEGER),
+                            'totalItems': openapi.Schema(type=openapi.TYPE_INTEGER),
+                            'itemsPerPage': openapi.Schema(type=openapi.TYPE_INTEGER),
+                            'hasNextPage': openapi.Schema(type=openapi.TYPE_BOOLEAN),
+                            'hasPrevPage': openapi.Schema(type=openapi.TYPE_BOOLEAN),
+                        }
+                    )
+                }
+            )
+        )
+    }
+)
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def get_products(request):
-    products = Product.objects.all()
-    return Response([{
-        'id': product.id,
-        'name': product.name,
-        'brand': product.brand,
-        'description': product.description,
-        'base_price': str(product.base_price),
-        'current_price': str(product.current_price),
-        'discount_percentage': str(product.discount_percentage),
-        'discount_start_date': product.discount_start_date,
-        'discount_end_date': product.discount_end_date,
-        'category': product.category,
-        'created_at': product.created_at
-    } for product in products])
+    try:
+        # Obtener parámetros de paginación
+        page = int(request.GET.get('page', 1))
+        limit = int(request.GET.get('limit', 10))
+        
+        # Validar parámetros
+        if page < 1:
+            return Response(
+                {'error': 'El número de página debe ser mayor a 0'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        if limit < 1:
+            return Response(
+                {'error': 'El límite debe ser mayor a 0'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Calcular skip
+        skip = (page - 1) * limit
+        
+        # Obtener total de productos
+        total_items = Product.objects.count()
+        
+        # Calcular total de páginas
+        total_pages = (total_items + limit - 1) // limit
+        
+        # Obtener productos paginados
+        products = Product.objects.all()[skip:skip + limit]
+        
+        # Preparar respuesta
+        response_data = {
+            'data': [{
+                'id': product.id,
+                'name': product.name,
+                'brand': product.brand,
+                'description': product.description,
+                'base_price': str(product.base_price),
+                'current_price': str(product.current_price),
+                'discount_percentage': str(product.discount_percentage),
+                'discount_start_date': product.discount_start_date,
+                'discount_end_date': product.discount_end_date,
+                'category': product.category,
+                'created_at': product.created_at,
+                'image_url': getattr(product, 'image_url', f'https://via.placeholder.com/300x300.png?text={product.category}')
+            } for product in products],
+            'pagination': {
+                'currentPage': page,
+                'totalPages': total_pages,
+                'totalItems': total_items,
+                'itemsPerPage': limit,
+                'hasNextPage': page < total_pages,
+                'hasPrevPage': page > 1
+            }
+        }
+        
+        return Response(response_data)
+        
+    except ValueError:
+        return Response(
+            {'error': 'Los parámetros de paginación deben ser números enteros'}, 
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    except Exception as e:
+        return Response(
+            {'error': str(e)}, 
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 
 @swagger_auto_schema(
     method='put',

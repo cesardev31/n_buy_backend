@@ -81,18 +81,14 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 is_user=True
             )
 
-            # Enviar mensaje del usuario al grupo
-            await self.channel_layer.group_send(
-                self.room_group_name,
-                {
-                    "type": "chat_message",
-                    "message": message,
-                    "is_bot": False,
-                    "is_typing": False,
-                    "name": user_name,
-                    "is_admin": is_admin
-                }
-            )
+            # Enviar el mensaje del usuario directamente (sin pasar por el grupo)
+            await self.send(text_data=json.dumps({
+                "message": message,
+                "is_bot": False,
+                "is_typing": False,
+                "name": user_name,
+                "is_admin": is_admin
+            }))
 
             # Enviar indicador de "escribiendo..."
             await self.send(text_data=json.dumps({
@@ -113,18 +109,15 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 is_user=False
             )
 
-            # Enviar respuesta final
-            await self.channel_layer.group_send(
-                self.room_group_name,
-                {
-                    "type": "chat_message",
-                    "message": response,
-                    "is_bot": True,
-                    "is_typing": False,
-                    "name": "Bot",
-                    "is_admin": True
-                }
-            )
+            # Enviar respuesta del bot directamente (sin pasar por el grupo)
+            await self.send(text_data=json.dumps({
+                "message": response,
+                "is_bot": True,
+                "is_typing": False,
+                "name": "Bot",
+                "is_admin": True
+            }))
+
         except Exception as e:
             print(f"Error en receive: {str(e)}")
             error_message = f"❌ Lo siento, hubo un error al procesar tu mensaje: {str(e)}"

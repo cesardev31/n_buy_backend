@@ -9,36 +9,33 @@ class Product(models.Model):
     brand = models.CharField(max_length=100)
     description = models.TextField()
     base_price = models.DecimalField(
-        max_digits=10, 
+        max_digits=10,
         decimal_places=2,
-        default=0.00  # Agregamos un valor por defecto
+        default=0.00
     )
-    category = models.CharField(max_length=100)
-    created_at = models.DateTimeField(auto_now_add=True)
-    
-    # Campos para descuentos
     discount_percentage = models.DecimalField(
-        max_digits=5, 
+        max_digits=5,
         decimal_places=2,
         validators=[MinValueValidator(0), MaxValueValidator(100)],
         default=0
     )
     discount_start_date = models.DateTimeField(null=True, blank=True)
     discount_end_date = models.DateTimeField(null=True, blank=True)
+    image_url = models.URLField(max_length=500, null=True, blank=True)
+    category = models.CharField(max_length=100)
+    created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         db_table = 'products'
 
     @property
     def current_price(self):
-        if (self.discount_percentage > 0 and 
-            self.discount_start_date and 
-            self.discount_end_date and 
-            self.discount_start_date <= timezone.now() <= self.discount_end_date):
-            
-            discount = (self.base_price * self.discount_percentage) / 100
-            return self.base_price - discount
-        
+        if self.discount_percentage > 0:
+            now = timezone.now()
+            if (self.discount_start_date is None or self.discount_start_date <= now) and \
+               (self.discount_end_date is None or self.discount_end_date >= now):
+                discount = (self.base_price * self.discount_percentage) / 100
+                return self.base_price - discount
         return self.base_price
 
     def __str__(self):
