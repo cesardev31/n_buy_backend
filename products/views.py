@@ -33,6 +33,7 @@ logger = logging.getLogger('django.request')
             'discount_percentage': openapi.Schema(type=openapi.TYPE_NUMBER),
             'discount_start_date': openapi.Schema(type=openapi.TYPE_STRING, format='date-time'),
             'discount_end_date': openapi.Schema(type=openapi.TYPE_STRING, format='date-time'),
+            'image_url': openapi.Schema(type=openapi.TYPE_STRING),
         }
     )
 )
@@ -48,7 +49,8 @@ def create_product(request):
             category=request.data['category'],
             discount_percentage=request.data.get('discount_percentage', 0),
             discount_start_date=request.data.get('discount_start_date'),
-            discount_end_date=request.data.get('discount_end_date')
+            discount_end_date=request.data.get('discount_end_date'),
+            image_url=request.data.get('image_url')
         )
         return Response({
             'id': product.id,
@@ -61,6 +63,7 @@ def create_product(request):
             'discount_percentage': str(product.discount_percentage),
             'discount_start_date': product.discount_start_date,
             'discount_end_date': product.discount_end_date,
+            'image_url': product.image_url,
             'created_at': product.created_at
         }, status=status.HTTP_201_CREATED)
     except Exception as e:
@@ -213,6 +216,7 @@ def get_products(request):
             'discount_percentage': openapi.Schema(type=openapi.TYPE_NUMBER),
             'discount_start_date': openapi.Schema(type=openapi.TYPE_STRING, format='date-time'),
             'discount_end_date': openapi.Schema(type=openapi.TYPE_STRING, format='date-time'),
+            'image_url': openapi.Schema(type=openapi.TYPE_STRING),
         }
     )
 )
@@ -222,7 +226,7 @@ def update_product(request, product_id):
     try:
         product = Product.objects.get(id=product_id)
         fields = ['name', 'brand', 'description', 'base_price', 'category', 
-                 'discount_percentage', 'discount_start_date', 'discount_end_date']
+                 'discount_percentage', 'discount_start_date', 'discount_end_date', 'image_url']
         for field in fields:
             if field in request.data:
                 setattr(product, field, request.data[field])
@@ -237,6 +241,7 @@ def update_product(request, product_id):
             'discount_percentage': str(product.discount_percentage),
             'discount_start_date': product.discount_start_date,
             'discount_end_date': product.discount_end_date,
+            'image_url': product.image_url,
             'category': product.category,
             'created_at': product.created_at
         })
@@ -254,6 +259,79 @@ def delete_product(request, product_id):
         return Response(status=status.HTTP_204_NO_CONTENT)
     except Product.DoesNotExist:
         return Response({'error': 'Product not found'}, status=status.HTTP_404_NOT_FOUND)
+
+@swagger_auto_schema(
+    method='get',
+    operation_description="Get a product by its ID",
+    responses={
+        200: openapi.Response(
+            description="Product retrieved successfully",
+            schema=openapi.Schema(
+                type=openapi.TYPE_OBJECT,
+                properties={
+                    'id': openapi.Schema(type=openapi.TYPE_INTEGER),
+                    'name': openapi.Schema(type=openapi.TYPE_STRING),
+                    'brand': openapi.Schema(type=openapi.TYPE_STRING),
+                    'description': openapi.Schema(type=openapi.TYPE_STRING),
+                    'base_price': openapi.Schema(type=openapi.TYPE_NUMBER),
+                    'category': openapi.Schema(type=openapi.TYPE_STRING),
+                    'image_url': openapi.Schema(type=openapi.TYPE_STRING),
+                    'discount_percentage': openapi.Schema(type=openapi.TYPE_NUMBER),
+                    'discount_start_date': openapi.Schema(type=openapi.TYPE_STRING, format='date-time'),
+                    'discount_end_date': openapi.Schema(type=openapi.TYPE_STRING, format='date-time'),
+                    'current_price': openapi.Schema(type=openapi.TYPE_NUMBER),
+                    'average_rating': openapi.Schema(type=openapi.TYPE_NUMBER),
+                    'inventory': openapi.Schema(
+                        type=openapi.TYPE_OBJECT,
+                        properties={
+                            'quantity': openapi.Schema(type=openapi.TYPE_INTEGER),
+                            'last_updated': openapi.Schema(type=openapi.TYPE_STRING, format='date-time')
+                        }
+                    )
+                }
+            )
+        ),
+        404: openapi.Response(description="Product not found"),
+        500: openapi.Response(description="Server error")
+    }
+)
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def get_product_by_id(request, product_id):
+    try:
+        product = Product.objects.get(id=product_id)
+        inventory = Inventory.objects.filter(product=product).first()
+        
+        response_data = {
+            'id': product.id,
+            'name': product.name,
+            'brand': product.brand,
+            'description': product.description,
+            'base_price': float(product.base_price),
+            'category': product.category,
+            'image_url': product.image_url,
+            'discount_percentage': float(product.discount_percentage),
+            'discount_start_date': product.discount_start_date,
+            'discount_end_date': product.discount_end_date,
+            'current_price': float(product.current_price),
+            'average_rating': product.average_rating,
+            'inventory': {
+                'quantity': inventory.quantity if inventory else 0,
+                'last_updated': inventory.last_updated if inventory else None
+            } if inventory else None
+        }
+        
+        return Response(response_data)
+    except Product.DoesNotExist:
+        return Response(
+            {'error': 'Producto no encontrado'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+    except Exception as e:
+        return Response(
+            {'error': str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 
 # Inventario
 @swagger_auto_schema(
