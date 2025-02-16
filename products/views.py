@@ -2,7 +2,7 @@ from django.shortcuts import render
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import IsAuthenticated
 from .models import Product, Inventory, Rating, Sale
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
@@ -35,10 +35,15 @@ logger = logging.getLogger('django.request')
             'discount_end_date': openapi.Schema(type=openapi.TYPE_STRING, format='date-time'),
             'image_url': openapi.Schema(type=openapi.TYPE_STRING),
         }
-    )
+    ),
+    responses={
+        201: openapi.Response(description="Product created successfully"),
+        401: openapi.Response(description="Unauthorized"),
+        500: openapi.Response(description="Server error")
+    }
 )
 @api_view(['POST'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def create_product(request):
     try:
         product = Product.objects.create(
@@ -133,12 +138,12 @@ def create_product(request):
                 }
             )
         ),
-        400: 'Parámetros inválidos',
-        500: 'Error del servidor'
+        401: openapi.Response(description="Unauthorized"),
+        500: openapi.Response(description="Server error")
     }
 )
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def get_products(request):
     try:
         # Obtener parámetros de paginación
@@ -218,10 +223,16 @@ def get_products(request):
             'discount_end_date': openapi.Schema(type=openapi.TYPE_STRING, format='date-time'),
             'image_url': openapi.Schema(type=openapi.TYPE_STRING),
         }
-    )
+    ),
+    responses={
+        200: openapi.Response(description="Product updated successfully"),
+        401: openapi.Response(description="Unauthorized"),
+        404: openapi.Response(description="Product not found"),
+        500: openapi.Response(description="Server error")
+    }
 )
 @api_view(['PUT'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def update_product(request, product_id):
     try:
         product = Product.objects.get(id=product_id)
@@ -251,7 +262,7 @@ def update_product(request, product_id):
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['DELETE'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def delete_product(request, product_id):
     try:
         product = Product.objects.get(id=product_id)
@@ -291,12 +302,13 @@ def delete_product(request, product_id):
                 }
             )
         ),
+        401: openapi.Response(description="Unauthorized"),
         404: openapi.Response(description="Product not found"),
         500: openapi.Response(description="Server error")
     }
 )
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def get_product_by_id(request, product_id):
     try:
         product = Product.objects.get(id=product_id)
@@ -343,10 +355,16 @@ def get_product_by_id(request, product_id):
             'product_id': openapi.Schema(type=openapi.TYPE_INTEGER),
             'quantity': openapi.Schema(type=openapi.TYPE_INTEGER),
         }
-    )
+    ),
+    responses={
+        201: openapi.Response(description="Inventory created successfully"),
+        401: openapi.Response(description="Unauthorized"),
+        404: openapi.Response(description="Product not found"),
+        500: openapi.Response(description="Server error")
+    }
 )
 @api_view(['POST'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def create_inventory(request):
     try:
         product = Product.objects.get(id=request.data['product_id'])
@@ -369,11 +387,12 @@ def create_inventory(request):
     method='get',
     responses={
         200: openapi.Response('Inventario encontrado'),
+        401: openapi.Response(description="Unauthorized"),
         404: 'Inventario no encontrado'
     }
 )
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def get_inventory(request, product_id=None):
     # Log de la información de autenticación
     logger.debug(f"Headers de la solicitud: {request.headers}")
@@ -415,10 +434,16 @@ def get_inventory(request, product_id=None):
             'rating': openapi.Schema(type=openapi.TYPE_INTEGER),
             'review': openapi.Schema(type=openapi.TYPE_STRING),
         }
-    )
+    ),
+    responses={
+        201: openapi.Response(description="Rating created successfully"),
+        401: openapi.Response(description="Unauthorized"),
+        404: openapi.Response(description="Product not found"),
+        500: openapi.Response(description="Server error")
+    }
 )
 @api_view(['POST'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def create_rating(request):
     try:
         product = Product.objects.get(id=request.data['product_id'])
@@ -442,7 +467,7 @@ def create_rating(request):
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def get_product_ratings(request, product_id):
     ratings = Rating.objects.filter(product_id=product_id)
     return Response([{
@@ -455,7 +480,7 @@ def get_product_ratings(request, product_id):
     } for rating in ratings])
 
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def get_recommendations(request):
     try:
         # Obtener el token del header
@@ -514,7 +539,7 @@ def get_recommendations(request):
         )
 
 @api_view(['POST'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def create_sale(request):
     try:
         product = Product.objects.get(id=request.data['product_id'])
@@ -557,7 +582,7 @@ def create_sale(request):
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def get_sales(request):
     sales = Sale.objects.all()
     return Response([{
