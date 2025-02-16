@@ -53,10 +53,12 @@ INSTALLED_APPS = [
     'drf_yasg',
     'corsheaders',
     'channels',
-    'users',
     'products',
+    'users',
     'chat',
-    'recommendations',
+    'recommendations',  # Agregar app de recomendaciones
+    'analytics',  # Agregar app de analytics
+    'whitenoise.runserver_nostatic',
 ]
 
 # Configuración de middleware

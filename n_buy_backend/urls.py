@@ -52,6 +52,8 @@ urlpatterns = [
     # API endpoints
     path('api/users/', include('users.urls')),
     path('api/products/', include('products.urls')),
+    path('api/', include('recommendations.urls')), 
+    path('api/analytics/', include('analytics.urls')),
     
     # Chat
     path('chat/', include('chat.urls', namespace='chat')),

@@ -6,10 +6,13 @@ from rest_framework.permissions import AllowAny
 from .models import Product, Inventory, Rating, Sale
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
-from recommendations.services import RecommendationService
+from recommendations.ai_recommendations import AIRecommendationEngine
+from recommendations.models import RecommendationType
 from django.utils import timezone
 import logging
 from users.authentication import validate_token
+from django.core.paginator import Paginator
+from django.db.models import Avg, Q
 
 logger = logging.getLogger('django.request')
 
@@ -69,15 +72,22 @@ def create_product(request):
         openapi.Parameter(
             'page',
             openapi.IN_QUERY,
-            description='Número de página (default: 1)',
+            description='Número de página',
             type=openapi.TYPE_INTEGER,
-            required=False
+            default=1
         ),
         openapi.Parameter(
             'limit',
             openapi.IN_QUERY,
-            description='Número de items por página (default: 10)',
+            description='Elementos por página',
             type=openapi.TYPE_INTEGER,
+            default=10
+        ),
+        openapi.Parameter(
+            'search',
+            openapi.IN_QUERY,
+            description='Buscar productos por nombre',
+            type=openapi.TYPE_STRING,
             required=False
         ),
     ],
@@ -101,6 +111,8 @@ def create_product(request):
                                 'discount_percentage': openapi.Schema(type=openapi.TYPE_STRING),
                                 'category': openapi.Schema(type=openapi.TYPE_STRING),
                                 'image_url': openapi.Schema(type=openapi.TYPE_STRING),
+                                'rating': openapi.Schema(type=openapi.TYPE_NUMBER),
+                                'num_ratings': openapi.Schema(type=openapi.TYPE_INTEGER),
                             }
                         )
                     ),
@@ -110,14 +122,16 @@ def create_product(request):
                             'currentPage': openapi.Schema(type=openapi.TYPE_INTEGER),
                             'totalPages': openapi.Schema(type=openapi.TYPE_INTEGER),
                             'totalItems': openapi.Schema(type=openapi.TYPE_INTEGER),
-                            'itemsPerPage': openapi.Schema(type=openapi.TYPE_INTEGER),
                             'hasNextPage': openapi.Schema(type=openapi.TYPE_BOOLEAN),
                             'hasPrevPage': openapi.Schema(type=openapi.TYPE_BOOLEAN),
+                            'itemsPerPage': openapi.Schema(type=openapi.TYPE_INTEGER),
                         }
                     )
                 }
             )
-        )
+        ),
+        400: 'Parámetros inválidos',
+        500: 'Error del servidor'
     }
 )
 @api_view(['GET'])
@@ -127,34 +141,32 @@ def get_products(request):
         # Obtener parámetros de paginación
         page = int(request.GET.get('page', 1))
         limit = int(request.GET.get('limit', 10))
+        search = request.GET.get('search', '').strip()
         
-        # Validar parámetros
-        if page < 1:
-            return Response(
-                {'error': 'El número de página debe ser mayor a 0'}, 
-                status=status.HTTP_400_BAD_REQUEST
+        # Obtener todos los productos
+        products = Product.objects.all()
+        
+        # Aplicar filtro de búsqueda si existe
+        if search:
+            products = products.filter(
+                Q(name__icontains=search) |  # Buscar en nombre
+                Q(description__icontains=search)  # Buscar en descripción
             )
-        if limit < 1:
-            return Response(
-                {'error': 'El límite debe ser mayor a 0'}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
+
+        # Crear paginador
+        paginator = Paginator(products, limit)
         
-        # Calcular skip
-        skip = (page - 1) * limit
+        # Obtener página actual
+        current_page = paginator.page(page)
         
-        # Obtener total de productos
-        total_items = Product.objects.count()
-        
-        # Calcular total de páginas
-        total_pages = (total_items + limit - 1) // limit
-        
-        # Obtener productos paginados
-        products = Product.objects.all()[skip:skip + limit]
-        
-        # Preparar respuesta
-        response_data = {
-            'data': [{
+        # Preparar datos de respuesta
+        products_data = []
+        for product in current_page:
+            # Calcular rating promedio
+            avg_rating = product.ratings.aggregate(avg=Avg('score'))['avg']
+            rating = round(avg_rating, 2) if avg_rating is not None else 0
+            
+            products_data.append({
                 'id': product.id,
                 'name': product.name,
                 'brand': product.brand,
@@ -164,32 +176,29 @@ def get_products(request):
                 'discount_percentage': str(product.discount_percentage),
                 'discount_start_date': product.discount_start_date,
                 'discount_end_date': product.discount_end_date,
+                'image_url': getattr(product, 'image_url', f'https://via.placeholder.com/300x300.png?text={product.category}'),
                 'category': product.category,
-                'created_at': product.created_at,
-                'image_url': getattr(product, 'image_url', f'https://via.placeholder.com/300x300.png?text={product.category}')
-            } for product in products],
+                'rating': rating,
+                'num_ratings': product.ratings.count()
+            })
+        
+        # Preparar respuesta con metadatos de paginación
+        response_data = {
+            'data': products_data,
             'pagination': {
                 'currentPage': page,
-                'totalPages': total_pages,
-                'totalItems': total_items,
+                'totalPages': paginator.num_pages,
+                'totalItems': paginator.count,
+                'hasNextPage': current_page.has_next(),
+                'hasPrevPage': current_page.has_previous(),
                 'itemsPerPage': limit,
-                'hasNextPage': page < total_pages,
-                'hasPrevPage': page > 1
             }
         }
         
         return Response(response_data)
-        
-    except ValueError:
-        return Response(
-            {'error': 'Los parámetros de paginación deben ser números enteros'}, 
-            status=status.HTTP_400_BAD_REQUEST
-        )
     except Exception as e:
-        return Response(
-            {'error': str(e)}, 
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
+        logger.error(f"Error en get_products: {str(e)}")
+        return Response({'error': str(e)}, status=500)
 
 @swagger_auto_schema(
     method='put',
@@ -370,43 +379,62 @@ def get_product_ratings(request, product_id):
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def get_recommendations(request):
-    recommendations = RecommendationService.get_recommendations()
-    
-    return Response({
-        'highly_recommended': [{
-            'id': product.id,
-            'name': product.name,
-            'brand': product.brand,
-            'price': str(product.price),
-            'category': product.category
-        } for product in recommendations['highly_recommended']],
-        'recommended': [{
-            'id': product.id,
-            'name': product.name,
-            'brand': product.brand,
-            'price': str(product.price),
-            'category': product.category
-        } for product in recommendations['recommended']],
-        'not_recommended': [{
-            'id': product.id,
-            'name': product.name,
-            'brand': product.brand,
-            'price': str(product.price),
-            'category': product.category
-        } for product in recommendations['not_recommended']]
-    })
+    try:
+        # Obtener el token del header
+        token = request.headers.get('Authorization', '').replace('Bearer ', '')
+        user_data = {}
+        is_admin = False
 
-@swagger_auto_schema(
-    method='post',
-    request_body=openapi.Schema(
-        type=openapi.TYPE_OBJECT,
-        required=['product_id', 'quantity'],
-        properties={
-            'product_id': openapi.Schema(type=openapi.TYPE_INTEGER),
-            'quantity': openapi.Schema(type=openapi.TYPE_INTEGER),
-        }
-    )
-)
+        # Si hay token, validarlo y obtener datos del usuario
+        if token:
+            try:
+                payload = validate_token(token)
+                user_data = {
+                    'id': payload.get('user_id'),
+                    'name': payload.get('username'),
+                    'email': payload.get('email')
+                }
+                is_admin = payload.get('is_admin', False)
+            except Exception as e:
+                logger.warning(f"Error validando token: {str(e)}")
+                # Continuar sin datos de usuario si el token es inválido
+
+        # Inicializar el motor de recomendaciones
+        recommendation_engine = AIRecommendationEngine()
+        
+        # Obtener recomendaciones
+        recommendations = recommendation_engine.get_recommendations(
+            user_data=user_data,
+            is_admin=is_admin
+        )
+
+        # Convertir IDs a objetos de producto
+        response_data = {}
+        for category in ['highly_recommended', 'recommended', 'not_recommended']:
+            response_data[category] = []
+            for rec in recommendations.get(category, []):
+                try:
+                    product = Product.objects.get(id=rec['id'])
+                    response_data[category].append({
+                        'id': product.id,
+                        'name': product.name,
+                        'brand': product.brand,
+                        'price': str(product.current_price),
+                        'category': product.category,
+                        'image_url': product.image_url or '',
+                        'reason': rec.get('reason', 'No especificada')
+                    })
+                except Product.DoesNotExist:
+                    continue
+
+        return Response(response_data)
+    except Exception as e:
+        logger.error(f"Error obteniendo recomendaciones: {str(e)}")
+        return Response(
+            {'error': f'Error obteniendo recomendaciones: {str(e)}'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def create_sale(request):

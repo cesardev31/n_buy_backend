@@ -8,6 +8,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import AllowAny
 from rest_framework_simplejwt.tokens import UntypedToken
+from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 
 User = get_user_model()
 
@@ -25,15 +26,24 @@ class JWTAuthentication(authentication.BaseAuthentication):
             
             token = auth_header.split(' ')[1]
             
+            # Obtener la configuración de JWT
+            algorithm = settings.SIMPLE_JWT.get('ALGORITHM', 'HS256')
+            signing_key = settings.SIMPLE_JWT.get('SIGNING_KEY', settings.SECRET_KEY)
+            user_id_claim = settings.SIMPLE_JWT.get('USER_ID_CLAIM', 'user_id')
+            token_type_claim = settings.SIMPLE_JWT.get('TOKEN_TYPE_CLAIM', 'token_type')
+            
             # Decodificar sin verificar para obtener el tipo de token
-            unverified_token = jwt_decode(token, options={"verify_signature": False})
+            unverified_payload = jwt_decode(token, options={"verify_signature": False})
             
             # Verificar que sea un token de acceso
-            if unverified_token.get('token_type') != 'access':
+            if unverified_payload.get(token_type_claim) != 'access':
                 raise exceptions.AuthenticationFailed('Solo se permiten tokens de acceso en el header')
             
+            # Decodificar y verificar el token
+            payload = jwt_decode(token, signing_key, algorithms=[algorithm])
+            
             # Obtener el usuario
-            user = User.objects.get(id=unverified_token['user_id'])
+            user = User.objects.get(id=payload.get(user_id_claim))
             
             return (user, token)
             
@@ -65,18 +75,27 @@ def validate_token(view_func):
         try:
             token = auth_header.split(' ')[1]
             
+            # Obtener la configuración de JWT
+            algorithm = settings.SIMPLE_JWT.get('ALGORITHM', 'HS256')
+            signing_key = settings.SIMPLE_JWT.get('SIGNING_KEY', settings.SECRET_KEY)
+            user_id_claim = settings.SIMPLE_JWT.get('USER_ID_CLAIM', 'user_id')
+            token_type_claim = settings.SIMPLE_JWT.get('TOKEN_TYPE_CLAIM', 'token_type')
+            
             # Decodificar sin verificar para obtener el tipo de token
             unverified_payload = jwt_decode(token, options={"verify_signature": False})
             
             # Verificar que sea un token de acceso
-            if unverified_payload.get('token_type') != 'access':
+            if unverified_payload.get(token_type_claim) != 'access':
                 return Response(
                     {'error': 'Solo se permiten tokens de acceso en el header'}, 
                     status=status.HTTP_401_UNAUTHORIZED
                 )
             
+            # Decodificar y verificar el token
+            payload = jwt_decode(token, signing_key, algorithms=[algorithm])
+            
             # Obtener el usuario
-            user = User.objects.get(id=unverified_payload['user_id'])
+            user = User.objects.get(id=payload.get(user_id_claim))
             
             # Agregar el usuario y el token al request
             request.user = user
@@ -96,3 +115,33 @@ def validate_token(view_func):
             )
             
     return wrapped_view
+
+def extract_token_data(token):
+    """
+    Valida un token JWT y extrae los datos del usuario
+    Returns: (user_id, is_admin)
+    """
+    try:
+        # Obtener la configuración de JWT
+        algorithm = settings.SIMPLE_JWT.get('ALGORITHM', 'HS256')
+        signing_key = settings.SIMPLE_JWT.get('SIGNING_KEY', settings.SECRET_KEY)
+        user_id_claim = settings.SIMPLE_JWT.get('USER_ID_CLAIM', 'user_id')
+        token_type_claim = settings.SIMPLE_JWT.get('TOKEN_TYPE_CLAIM', 'token_type')
+        
+        # Decodificar y verificar el token
+        payload = jwt_decode(token, signing_key, algorithms=[algorithm])
+        
+        # Verificar que sea un token de acceso
+        if payload.get(token_type_claim) != 'access':
+            raise ValueError('Token inválido: no es un token de acceso')
+            
+        user_id = payload.get(user_id_claim)
+        is_admin = payload.get('is_admin', False)
+        
+        if not user_id:
+            raise ValueError('Token inválido: no contiene user_id')
+            
+        return user_id, is_admin
+        
+    except Exception as e:
+        raise ValueError(f'Token inválido: {str(e)}')

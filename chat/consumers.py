@@ -12,8 +12,8 @@ from channels.middleware import BaseMiddleware
 from django.contrib.auth.models import AnonymousUser
 from django.contrib.auth import get_user_model
 from channels.db import database_sync_to_async
-from recommendations.recommendation_engine import RecommendationEngine
-from recommendations.models import ProductRecommendation, UserPreference
+from recommendations.ai_recommendations import AIRecommendationEngine
+from recommendations.models import RecommendationType
 
 User = get_user_model()
 
@@ -21,7 +21,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
     async def connect(self):
         # Generar un ID único para la sesión
         self.session_id = str(uuid.uuid4())
-        self.recommendation_engine = RecommendationEngine()
+        self.recommendation_engine = AIRecommendationEngine()
         
         # Verificar y configurar Google AI
         if not hasattr(settings, 'GOOGLE_API_KEY') or not settings.GOOGLE_API_KEY:
@@ -149,25 +149,22 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
     async def process_with_ai(self, message, user_name, is_admin):
         try:
+            # Obtener recomendaciones usando el nuevo motor
+            recommendations = await self.recommendation_engine.get_recommendations(
+                user_data={'name': user_name},
+                is_admin=is_admin
+            )
+            
             # Obtener datos del sistema para contexto
             products = await sync_to_async(list)(Product.objects.all())
             inventories = await sync_to_async(list)(Inventory.objects.all())
             
             # Crear listas de productos por tipo de recomendación
             recommended_products = {
-                'high': [],
-                'medium': [],
-                'low': []
+                RecommendationType.HIGHLY_RECOMMENDED: recommendations.get('highly_recommended', []),
+                RecommendationType.RECOMMENDED: recommendations.get('recommended', []),
+                RecommendationType.NOT_RECOMMENDED: recommendations.get('not_recommended', [])
             }
-            
-            for product in products:
-                recommended_products['low'].append({
-                    'name': product.name,
-                    'price': float(product.current_price),
-                    'brand': product.brand,
-                    'category': product.category,
-                    'stock': next((inv.quantity for inv in inventories if inv.product_id == product.id), 0)
-                })
 
             # Crear contexto con datos reales
             system_context = f"""
@@ -179,13 +176,13 @@ class ChatConsumer(AsyncWebsocketConsumer):
             📦 Total de productos: {len(products)}
             
             ✅ Productos Altamente Recomendados:
-            {self._format_product_list(recommended_products['high'])}
+            {self._format_product_list(recommended_products[RecommendationType.HIGHLY_RECOMMENDED])}
             
             🔹 Productos Recomendados:
-            {self._format_product_list(recommended_products['medium'])}
+            {self._format_product_list(recommended_products[RecommendationType.RECOMMENDED])}
             
             ❌ Otros Productos:
-            {self._format_product_list(recommended_products['low'])}
+            {self._format_product_list(recommended_products[RecommendationType.NOT_RECOMMENDED])}
             """
 
             # Configurar el modelo
@@ -225,7 +222,19 @@ class ChatConsumer(AsyncWebsocketConsumer):
         if not products:
             return "Ninguno disponible"
         
-        return "\n".join([
-            f"• {p['name']} ({p['brand']}) - ${p['price']:.2f} - {p['stock']} unidades disponibles"
-            for p in products
-        ])
+        formatted_products = []
+        for p in products:
+            if isinstance(p, dict) and 'id' in p:
+                # Obtener el producto de la base de datos
+                try:
+                    product = Product.objects.get(id=p['id'])
+                    inventory = Inventory.objects.filter(product=product).first()
+                    stock = inventory.quantity if inventory else 0
+                    formatted_products.append(
+                        f"• {product.name} ({product.brand}) - ${float(product.current_price):.2f} - {stock} unidades disponibles"
+                        f"\n  Razón: {p.get('reason', 'No especificada')}"
+                    )
+                except Product.DoesNotExist:
+                    continue
+            
+        return "\n".join(formatted_products) if formatted_products else "Ninguno disponible"
