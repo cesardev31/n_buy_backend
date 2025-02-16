@@ -50,13 +50,12 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'rest_framework',
-    'rest_framework_simplejwt',
     'drf_yasg',
     'corsheaders',
+    'channels',
     'users',
     'products',
     'chat',
-    'channels',
     'recommendations',
 ]
 
@@ -98,14 +97,8 @@ WSGI_APPLICATION = 'n_buy_backend.wsgi.application'
 ASGI_APPLICATION = 'n_buy_backend.asgi.application'
 
 CHANNEL_LAYERS = {
-    "default": {
-        "BACKEND": "channels.layers.InMemoryChannelLayer"
-        # Para desarrollo usamos InMemoryChannelLayer
-        # Para producción deberías usar Redis:
-        # "BACKEND": "channels_redis.core.RedisChannelLayer",
-        # "CONFIG": {
-        #     "hosts": [("127.0.0.1", 6379)],
-        # },
+    'default': {
+        'BACKEND': 'channels.layers.InMemoryChannelLayer'
     }
 }
 
@@ -181,6 +174,26 @@ SWAGGER_SETTINGS = {
     'SCHEMES': ['https'] if not DEBUG else ['http', 'https'],
     'DEFAULT_PROTOCOL': 'https' if not DEBUG else 'http'
 }
+
+# Configuración de CORS
+CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+]
+
+# Configuración de seguridad
+CSRF_TRUSTED_ORIGINS = ['https://*.render.com', 'http://*', 'https://*']
+
+# Configuración de autenticación
+LOGIN_URL = 'login'
+LOGIN_REDIRECT_URL = 'chat:chat_test'
+LOGOUT_REDIRECT_URL = 'login'
+
+AUTHENTICATION_BACKENDS = [
+    'django.contrib.auth.backends.ModelBackend',
+]
 
 # Configuración para forzar HTTPS
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
@@ -264,23 +277,3 @@ SIMPLE_JWT = {
 
 # Agregar esta línea después de DEFAULT_AUTO_FIELD
 AUTH_USER_MODEL = 'users.User'
-
-# Configuración de CORS
-CORS_ALLOW_ALL_ORIGINS = True
-CORS_ALLOW_CREDENTIALS = True
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:8000",
-    "http://127.0.0.1:8000",
-]
-
-# Configuración de seguridad
-CSRF_TRUSTED_ORIGINS = ['https://*.render.com', 'http://*', 'https://*']
-
-# Configuración de autenticación
-LOGIN_URL = 'login'
-LOGIN_REDIRECT_URL = 'chat:chat_test'
-LOGOUT_REDIRECT_URL = 'login'
-
-AUTHENTICATION_BACKENDS = [
-    'django.contrib.auth.backends.ModelBackend',
-]
