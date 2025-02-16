@@ -1,5 +1,6 @@
 import json
 import os
+import uuid
 from channels.generic.websocket import AsyncWebsocketConsumer
 import google.generativeai as genai
 from asgiref.sync import sync_to_async
@@ -18,11 +19,8 @@ User = get_user_model()
 
 class ChatConsumer(AsyncWebsocketConsumer):
     async def connect(self):
-        if self.scope["user"].is_anonymous:
-            await self.close()
-            return
-
-        self.user = self.scope["user"]
+        # Generar un ID único para la sesión
+        self.session_id = str(uuid.uuid4())
         self.recommendation_engine = RecommendationEngine()
         
         # Verificar y configurar Google AI
@@ -33,7 +31,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
             
         genai.configure(api_key=settings.GOOGLE_API_KEY)
 
-        self.room_name = f"user_{self.user.id}"
+        self.room_name = f"session_{self.session_id}"
         self.room_group_name = f"chat_{self.room_name}"
 
         # Unirse al grupo de chat
@@ -42,70 +40,32 @@ class ChatConsumer(AsyncWebsocketConsumer):
             self.channel_name
         )
 
-        # Crear sesión de chat
-        try:
-            self.chat_session = await database_sync_to_async(ChatSession.objects.create)(
-                user=self.user,
-                is_active=True
-            )
-            await self.accept()
+        await self.accept()
 
-            # Calcular recomendaciones
-            await database_sync_to_async(self.recommendation_engine.calculate_recommendations)(self.user)
-
-            # Obtener recomendaciones
-            recommendations = await database_sync_to_async(self.recommendation_engine.get_recommendations_by_type)(
-                self.user, 'high'
-            )
-            recommendations = await database_sync_to_async(list)(recommendations[:3])
-
-            # Crear mensaje de bienvenida con recomendaciones
-            products_text = ""
-            if recommendations:
-                products_text = "\n".join([
-                    f"🌟 {rec.product.name} - ${rec.product.current_price:.2f}"
-                    for rec in recommendations
-                ])
-            else:
-                products_text = "Aún no tenemos recomendaciones personalizadas para ti."
-
-            welcome_message = (
-                f"👋 ¡Hola! Soy el asistente virtual de Buy n Large.\n\n"
-                "Te puedo ayudar con:\n"
-                "🔍 • Buscar productos específicos\n"
-                "💡 • Obtener recomendaciones personalizadas\n"
-                "📦 • Consultar disponibilidad y precios\n"
-                "❓ • Responder tus dudas sobre nuestros productos\n\n"
-                f"✨ Productos recomendados para ti:\n{products_text}\n\n"
-                "¿En qué puedo ayudarte hoy?"
-            )
-            
-            await self.send(text_data=json.dumps({
-                "message": welcome_message,
-                "is_bot": True,
-                "name": "Buy n Large",
-                "is_admin": False
-            }))
-        except Exception as e:
-            print(f"Error en connect: {str(e)}")
-            await self.close()
+        # Mensaje de bienvenida simple sin recomendaciones personalizadas
+        welcome_message = (
+            f"👋 ¡Hola! Soy el asistente virtual de Buy n Large.\n\n"
+            "Te puedo ayudar con:\n"
+            "🔍 • Buscar productos específicos\n"
+            "📦 • Consultar disponibilidad y precios\n"
+            "❓ • Responder tus dudas sobre nuestros productos\n\n"
+            "¿En qué puedo ayudarte hoy?"
+        )
+        
+        await self.send(text_data=json.dumps({
+            "message": welcome_message,
+            "is_bot": True,
+            "name": "Buy n Large",
+            "is_admin": False
+        }))
 
     async def disconnect(self, close_code):
-        try:
-            # Dejar el grupo de chat
-            if hasattr(self, 'room_group_name'):
-                await self.channel_layer.group_discard(
-                    self.room_group_name,
-                    self.channel_name
-                )
-
-            # Marcar la sesión como inactiva
-            if hasattr(self, 'chat_session'):
-                await database_sync_to_async(self.chat_session.save)()
-                self.chat_session.is_active = False
-                await database_sync_to_async(self.chat_session.save)()
-        except Exception as e:
-            print(f"Error en disconnect: {str(e)}")
+        # Dejar el grupo de chat
+        if hasattr(self, 'room_group_name'):
+            await self.channel_layer.group_discard(
+                self.room_group_name,
+                self.channel_name
+            )
 
     async def receive(self, text_data):
         try:
@@ -116,7 +76,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
             # Guardar mensaje del usuario
             await database_sync_to_async(ChatMessage.objects.create)(
-                session=self.chat_session,
+                anonymous_session_id=self.session_id,
                 content=message,
                 is_user=True
             )
@@ -148,7 +108,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
             # Guardar respuesta del bot
             await database_sync_to_async(ChatMessage.objects.create)(
-                session=self.chat_session,
+                anonymous_session_id=self.session_id,
                 content=response,
                 is_user=False
             )
@@ -200,12 +160,6 @@ class ChatConsumer(AsyncWebsocketConsumer):
             products = await sync_to_async(list)(Product.objects.all())
             inventories = await sync_to_async(list)(Inventory.objects.all())
             
-            # Obtener recomendaciones del usuario
-            recommendations = await database_sync_to_async(self.recommendation_engine.get_recommendations_by_type)(
-                self.user
-            )
-            recommendations = await database_sync_to_async(list)(recommendations)
-            
             # Crear listas de productos por tipo de recomendación
             recommended_products = {
                 'high': [],
@@ -213,13 +167,13 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 'low': []
             }
             
-            for rec in recommendations:
-                recommended_products[rec.recommendation_type].append({
-                    'name': rec.product.name,
-                    'price': float(rec.product.current_price),
-                    'brand': rec.product.brand,
-                    'category': rec.product.category,
-                    'stock': next((inv.quantity for inv in inventories if inv.product_id == rec.product.id), 0)
+            for product in products:
+                recommended_products['low'].append({
+                    'name': product.name,
+                    'price': float(product.current_price),
+                    'brand': product.brand,
+                    'category': product.category,
+                    'stock': next((inv.quantity for inv in inventories if inv.product_id == product.id), 0)
                 })
 
             # Crear contexto con datos reales
