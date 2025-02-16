@@ -7,6 +7,12 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
+from rest_framework_simplejwt.tokens import RefreshToken, AccessToken
+from rest_framework_simplejwt.exceptions import TokenError
+from rest_framework_simplejwt.tokens import UntypedToken
+from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
+from jwt import decode as jwt_decode
+from django.conf import settings
 
 @swagger_auto_schema(
     method='post',
@@ -195,6 +201,81 @@ def login_user(request):
                 status=status.HTTP_404_NOT_FOUND
             )
 
+    except Exception as e:
+        return Response(
+            {'error': str(e)}, 
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+@swagger_auto_schema(
+    method='post',
+    request_body=openapi.Schema(
+        type=openapi.TYPE_OBJECT,
+        required=['token'],
+        properties={
+            'token': openapi.Schema(type=openapi.TYPE_STRING, description='Token JWT (puede ser access o refresh token)'),
+        }
+    ),
+    responses={
+        200: openapi.Response(
+            description="Datos del usuario obtenidos exitosamente",
+            schema=openapi.Schema(
+                type=openapi.TYPE_OBJECT,
+                properties={
+                    'user_id': openapi.Schema(type=openapi.TYPE_INTEGER),
+                    'email': openapi.Schema(type=openapi.TYPE_STRING),
+                    'role': openapi.Schema(type=openapi.TYPE_STRING),
+                    'token_data': openapi.Schema(type=openapi.TYPE_OBJECT),
+                    'token_type': openapi.Schema(type=openapi.TYPE_STRING),
+                }
+            )
+        ),
+        400: 'Token inválido',
+        401: 'Token expirado o inválido',
+        500: 'Error del servidor'
+    }
+)
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def verify_token(request):
+    try:
+        token = request.data.get('token')
+        
+        if not token:
+            return Response(
+                {'error': 'Token es requerido'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            # Decodificar el token sin verificar firma
+            token_data = jwt_decode(token, options={"verify_signature": False})
+            user_id = token_data.get('user_id')
+            token_type = token_data.get('token_type', 'unknown')
+            
+            if not user_id:
+                return Response(
+                    {'error': 'Token no contiene user_id'}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Obtener el usuario
+            user = User.objects.get(id=user_id)
+            
+            return Response({
+                'user_id': user.id,
+                'email': user.email,
+                'role': 'admin' if user.is_admin else 'user',
+                'token_data': token_data,
+                'token_type': token_type  # Incluir el tipo de token en la respuesta
+            })
+            
+        except Exception as e:
+            return Response(
+                {'error': f'Error al procesar el token: {str(e)}'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
     except Exception as e:
         return Response(
             {'error': str(e)}, 

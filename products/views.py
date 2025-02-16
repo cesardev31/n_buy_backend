@@ -9,6 +9,7 @@ from drf_yasg import openapi
 from recommendations.services import RecommendationService
 from django.utils import timezone
 import logging
+from users.authentication import validate_token
 
 logger = logging.getLogger('django.request')
 
@@ -352,3 +353,13 @@ def get_sales(request):
         'total_price': str(sale.total_price),
         'created_at': sale.created_at
     } for sale in sales])
+
+@api_view(['GET'])
+@validate_token
+def protected_endpoint(request):
+    # El usuario ya está validado aquí
+    return Response({
+        'message': 'Acceso permitido',
+        'user_id': request.user.id,
+        'email': request.user.email
+    })
