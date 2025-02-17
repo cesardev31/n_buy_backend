@@ -248,8 +248,17 @@ def verify_token(request):
             )
 
         try:
-            # Decodificar el token sin verificar firma
-            token_data = jwt_decode(token, options={"verify_signature": False})
+            # Obtener la configuración de JWT
+            algorithm = settings.SIMPLE_JWT.get('ALGORITHM', 'HS256')
+            signing_key = settings.SIMPLE_JWT.get('SIGNING_KEY', settings.SECRET_KEY)
+            
+            # Decodificar el token con verificación
+            token_data = jwt_decode(
+                token, 
+                signing_key,
+                algorithms=[algorithm],
+                options={"verify_signature": True}
+            )
             user_id = token_data.get('user_id')
             token_type = token_data.get('token_type', 'unknown')
             
@@ -267,9 +276,14 @@ def verify_token(request):
                 'email': user.email,
                 'role': 'admin' if user.is_admin else 'user',
                 'token_data': token_data,
-                'token_type': token_type  # Incluir el tipo de token en la respuesta
+                'token_type': token_type
             })
             
+        except TokenError as e:
+            return Response(
+                {'error': f'Token inválido: {str(e)}'}, 
+                status=status.HTTP_401_UNAUTHORIZED
+            )
         except Exception as e:
             return Response(
                 {'error': f'Error al procesar el token: {str(e)}'}, 

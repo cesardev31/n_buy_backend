@@ -15,6 +15,7 @@ class ChatSession(models.Model):
 
 class ChatMessage(models.Model):
     session = models.ForeignKey(ChatSession, on_delete=models.CASCADE, null=True, blank=True)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
     anonymous_session_id = models.CharField(max_length=100, null=True, blank=True)
     content = models.TextField()
     is_user = models.BooleanField(default=True)
