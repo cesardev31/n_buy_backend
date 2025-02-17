@@ -1,5 +1,6 @@
 import json
 import logging
+import google.generativeai as genai
 from channels.generic.websocket import AsyncWebsocketConsumer
 from django.contrib.auth import get_user_model
 from asgiref.sync import sync_to_async
@@ -7,6 +8,7 @@ import jwt
 from django.conf import settings
 from django.db.models import Count, Avg, F
 from products.models import Product, Sale
+from decimal import Decimal
 
 logger = logging.getLogger(__name__)
 
@@ -166,65 +168,66 @@ class ChatConsumer(AsyncWebsocketConsumer):
             logger.error(f"Error obteniendo ventas: {str(e)}")
             return None
 
+    def decimal_to_float(self, obj):
+        """Convierte objetos Decimal a float para serialización JSON"""
+        if isinstance(obj, Decimal):
+            return float(obj)
+        elif isinstance(obj, dict):
+            return {k: self.decimal_to_float(v) for k, v in obj.items()}
+        elif isinstance(obj, (list, tuple)):
+            return [self.decimal_to_float(x) for x in obj]
+        return obj
+
     async def process_with_ai(self, message, user):
-        """Procesa el mensaje con IA y retorna una respuesta"""
+        """Procesa el mensaje con IA usando Google AI (Gemini)"""
         try:
-            # Si el mensaje contiene palabras clave relacionadas con ventas
-            if any(keyword in message.lower() for keyword in ['venta', 'ventas', 'vendido', 'vendidos']):
-                sales_data = await self.get_sales_data()
-                if sales_data:
-                    return f"""
-                    📊 Resumen de Ventas:
-                    
-                    Total de ventas: {sales_data['total_sales']}
-                    Ingresos totales: ${sales_data['total_revenue']}
-                    
-                    🏆 Productos más vendidos:
-                    {chr(10).join(f"- {p['name']}: {p['quantity']} unidades" for p in sales_data['top_products'])}
-                    
-                    🕒 Ventas recientes:
-                    {chr(10).join(f"- {s['product']['name']}: {s['product']['quantity']} x ${s['product']['unit_price']}" for s in sales_data['recent_sales'])}
-                    """
-                else:
-                    return "Lo siento, no pude obtener los datos de ventas en este momento."
-
-            # Si el mensaje contiene palabras clave relacionadas con productos
-            elif any(keyword in message.lower() for keyword in ['producto', 'productos', 'inventario', 'stock']):
-                products = await self.get_products_data()
-                if products:
-                    return f"""
-                    📦 Productos disponibles:
-                    
-                    {chr(10).join(f"- {p['name']}: ${p['base_price']} ({p['current_stock']} en stock)" for p in products[:5])}
-                    
-                    Total de productos: {len(products)}
-                    """
-                else:
-                    return "Lo siento, no pude obtener los datos de productos en este momento."
-
-            # Respuesta genérica usando el contexto
-            user_name = user.name if user.name else "visitante"
+            # Obtener datos contextuales
+            products = await self.get_products_data()
+            sales_data = await self.get_sales_data()
             
-            if user.is_admin:
-                return f"""Hola administrador {user_name}, ¿en qué puedo ayudarte? 
+            # Convertir Decimal a float para serialización
+            products = self.decimal_to_float(products) if products else None
+            sales_data = self.decimal_to_float(sales_data) if sales_data else None
+            
+            # Configurar Google AI
+            if not hasattr(settings, 'GOOGLE_API_KEY') or not settings.GOOGLE_API_KEY:
+                logger.error("GOOGLE_API_KEY no está configurada en settings")
+                return "Lo siento, hay un problema con la configuración del sistema."
                 
-                Puedo ayudarte con:
-                📊 Consultar ventas y estadísticas
-                📦 Ver inventario y productos
-                💰 Revisar ingresos
-                """
-            else:
-                return f"""Hola {user_name}, ¿en qué puedo ayudarte? 
-                
-                Puedo ayudarte con:
-                🛍️ Buscar productos
-                💡 Información de productos
-                📦 Consultar stock
-                """
+            genai.configure(api_key=settings.GOOGLE_API_KEY)
+            model = genai.GenerativeModel('gemini-pro')
+            
+            # Crear el prompt con el contexto
+            prompt = f"""
+            Eres el asistente virtual oficial de Buy n Large. Tu nombre es "Buy n Large Assistant".
+            
+            INSTRUCCIONES IMPORTANTES:
+            1. SIEMPRE identifícate como "Buy n Large Assistant" al inicio de cada respuesta.
+            2. NUNCA uses otro nombre o te identifiques de otra manera.
+            3. Sé conciso y directo en tus respuestas.
+            4. Si el usuario pregunta por productos o ventas, incluye datos específicos.
+            5. Mantén un tono profesional y amigable.
+            
+            Contexto del usuario:
+            - Nombre: {user.username}
+            - Rol: {'Administrador' if user.is_staff else 'Cliente'}
+            
+            Datos de productos disponibles:
+            {json.dumps(products, indent=2) if products else 'No hay datos de productos disponibles'}
+            
+            Datos de ventas recientes:
+            {json.dumps(sales_data, indent=2) if sales_data else 'No hay datos de ventas disponibles'}
+            
+            Mensaje del usuario: {message}
+            """
+            
+            # Generar respuesta usando el modelo
+            response = model.generate_content(prompt)
+            return response.text
             
         except Exception as e:
-            logger.error(f"Error en process_with_ai: {str(e)}")
-            return "Lo siento, no puedo procesar tu solicitud en este momento. Por favor, intenta más tarde."
+            logger.error(f"Error procesando mensaje con IA: {str(e)}")
+            return "Lo siento, hubo un problema al procesar tu mensaje. Por favor, inténtalo de nuevo."
 
     async def disconnect(self, close_code):
         """
