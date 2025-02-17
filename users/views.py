@@ -35,6 +35,7 @@ from django.conf import settings
                     'user_id': openapi.Schema(type=openapi.TYPE_INTEGER),
                     'name': openapi.Schema(type=openapi.TYPE_STRING),
                     'email': openapi.Schema(type=openapi.TYPE_STRING),
+                    'is_admin': openapi.Schema(type=openapi.TYPE_BOOLEAN),
                     'tokens': openapi.Schema(
                         type=openapi.TYPE_OBJECT,
                         properties={
@@ -84,11 +85,16 @@ def register_user(request):
         )
 
         refresh = RefreshToken.for_user(user)
+        
+        # Agregar claims adicionales al token
+        refresh['name'] = user.name
+        refresh['is_admin'] = user.is_admin
 
         return Response({
             'user_id': user.id,
             'name': user.name,
             'email': user.email,
+            'is_admin': user.is_admin,
             'tokens': {
                 'refresh': str(refresh),
                 'access': str(refresh.access_token),
@@ -159,10 +165,15 @@ def login_user(request):
             if auth_user is not None:
                 # La autenticación fue exitosa
                 refresh = RefreshToken.for_user(auth_user)
+                
+                # Agregar claims adicionales al token
+                refresh['name'] = auth_user.name
+                refresh['is_admin'] = auth_user.is_admin
+                
                 return Response({
                     'user_id': auth_user.id,
                     'email': auth_user.email,
-                    'username': auth_user.username,
+                    'name': auth_user.name,
                     'is_admin': auth_user.is_admin,
                     'tokens': {
                         'refresh': str(refresh),
@@ -173,10 +184,15 @@ def login_user(request):
             # Si authenticate falló, intentar verificar la contraseña directamente
             if user.check_password(password):
                 refresh = RefreshToken.for_user(user)
+                
+                # Agregar claims adicionales al token
+                refresh['name'] = user.name
+                refresh['is_admin'] = user.is_admin
+                
                 return Response({
                     'user_id': user.id,
                     'email': user.email,
-                    'username': user.username,
+                    'name': user.name,
                     'is_admin': user.is_admin,
                     'tokens': {
                         'refresh': str(refresh),
